@@ -24,25 +24,25 @@ import (
 	"github.com/jonas747/yagpdb/web"
 
 	// Plugin imports
-	"github.com/jonas747/yagpdb/automod"
-	"github.com/jonas747/yagpdb/autorole"
-	"github.com/jonas747/yagpdb/aylien"
+	// "github.com/jonas747/yagpdb/automod"
+	// "github.com/jonas747/yagpdb/autorole"
+	// "github.com/jonas747/yagpdb/aylien"
 	"github.com/jonas747/yagpdb/commands"
-	"github.com/jonas747/yagpdb/customcommands"
-	"github.com/jonas747/yagpdb/discordlogger"
-	"github.com/jonas747/yagpdb/docs"
-	"github.com/jonas747/yagpdb/logs"
-	"github.com/jonas747/yagpdb/moderation"
-	"github.com/jonas747/yagpdb/notifications"
-	"github.com/jonas747/yagpdb/reddit"
-	"github.com/jonas747/yagpdb/reminders"
-	"github.com/jonas747/yagpdb/reputation"
-	"github.com/jonas747/yagpdb/rolecommands"
-	"github.com/jonas747/yagpdb/serverstats"
-	"github.com/jonas747/yagpdb/soundboard"
-	"github.com/jonas747/yagpdb/stdcommands"
-	"github.com/jonas747/yagpdb/streaming"
-	"github.com/jonas747/yagpdb/youtube"
+	// "github.com/jonas747/yagpdb/customcommands"
+	// "github.com/jonas747/yagpdb/discordlogger"
+	// "github.com/jonas747/yagpdb/docs"
+	// "github.com/jonas747/yagpdb/logs"
+	// "github.com/jonas747/yagpdb/moderation"
+	// "github.com/jonas747/yagpdb/notifications"
+	// "github.com/jonas747/yagpdb/reddit"
+	// "github.com/jonas747/yagpdb/reminders"
+	// "github.com/jonas747/yagpdb/reputation"
+	// "github.com/jonas747/yagpdb/rolecommands"
+	// "github.com/jonas747/yagpdb/serverstats"
+	// "github.com/jonas747/yagpdb/soundboard"
+	// "github.com/jonas747/yagpdb/stdcommands"
+	// "github.com/jonas747/yagpdb/streaming"
+	// "github.com/jonas747/yagpdb/youtube"
 )
 
 var (
@@ -98,25 +98,25 @@ func main() {
 	//BotSession.LogLevel = discordgo.LogInformational
 
 	// Setup plugins
-	discordlogger.Register()
-	docs.RegisterPlugin()
+	// discordlogger.Register()
+	// docs.RegisterPlugin()
 	commands.RegisterPlugin()
-	stdcommands.RegisterPlugin()
-	serverstats.RegisterPlugin()
-	notifications.RegisterPlugin()
-	customcommands.RegisterPlugin()
-	reddit.RegisterPlugin()
-	moderation.RegisterPlugin()
-	reputation.RegisterPlugin()
-	aylien.RegisterPlugin()
-	streaming.RegisterPlugin()
-	automod.RegisterPlugin()
-	logs.InitPlugin()
-	autorole.RegisterPlugin()
-	reminders.RegisterPlugin()
-	soundboard.RegisterPlugin()
-	youtube.RegisterPlugin()
-	rolecommands.RegisterPlugin()
+	// stdcommands.RegisterPlugin()
+	// serverstats.RegisterPlugin()
+	// notifications.RegisterPlugin()
+	// customcommands.RegisterPlugin()
+	// reddit.RegisterPlugin()
+	// moderation.RegisterPlugin()
+	// reputation.RegisterPlugin()
+	// aylien.RegisterPlugin()
+	// streaming.RegisterPlugin()
+	// automod.RegisterPlugin()
+	// logs.InitPlugin()
+	// autorole.RegisterPlugin()
+	// reminders.RegisterPlugin()
+	// soundboard.RegisterPlugin()
+	// youtube.RegisterPlugin()
+	// rolecommands.RegisterPlugin()
 
 	if flagDryRun {
 		log.Println("This is a dry run, exiting")

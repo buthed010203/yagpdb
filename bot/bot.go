@@ -2,9 +2,9 @@ package bot
 
 import (
 	log "github.com/Sirupsen/logrus"
+	"github.com/jonas747/dbstate"
 	"github.com/jonas747/discordgo"
 	"github.com/jonas747/dshardmanager"
-	"github.com/jonas747/dutil/dstate"
 	"github.com/jonas747/yagpdb/bot/eventsystem"
 	"github.com/jonas747/yagpdb/common"
 	"os"
@@ -17,15 +17,15 @@ var (
 	// When the bot was started
 	Started      = time.Now()
 	Running      bool
-	State        *dstate.State
+	State        *dbstate.State
 	ShardManager *dshardmanager.Manager
 
 	StateHandlerPtr *eventsystem.Handler
 )
 
 func Setup() {
+
 	// Things may rely on state being available at this point for initialization
-	State = dstate.NewState()
 	eventsystem.AddHandler(HandleReady, eventsystem.EventReady)
 	StateHandlerPtr = eventsystem.AddHandler(StateHandler, eventsystem.EventAll)
 	eventsystem.AddHandler(HandlePresenceUpdate, eventsystem.EventPresenceUpdate)
@@ -72,16 +72,36 @@ func Run() {
 
 		session.StateEnabled = false
 		session.LogLevel = discordgo.LogInformational
+		session.SyncEvents = true
 
 		return
 	}
-
 	// Only handler
 	ShardManager.AddHandler(eventsystem.HandleEvent)
 
-	State.MaxChannelMessages = 1000
-	State.MaxMessageAge = time.Hour
-	// State.Debug = true
+	bOpts := dbstate.RecommendedBadgerOptions("state")
+
+	numShard, err := ShardManager.GetRecommendedCount()
+	if err != nil {
+		panic("failed retrieving recommended shards")
+	}
+
+	State, err = dbstate.NewState(numShard, dbstate.Options{
+		DBOpts:              bOpts,
+		KeepDeletedMessages: true,
+		MessageTTL:          time.Hour * 6,
+		TrackChannels:       true,
+		TrackMembers:        true,
+		TrackMessages:       true,
+		TrackPresences:      true,
+		TrackRoles:          true,
+		UseChannelSyncMode:  false,
+	})
+
+	if err != nil {
+		panic("failed initalizing state")
+	}
+
 	Running = true
 	go ShardManager.Start()
 
@@ -112,6 +132,7 @@ func Stop(wg *sync.WaitGroup) {
 	}
 
 	ShardManager.StopAll()
+	State.Close()
 	wg.Done()
 }
 
@@ -170,13 +191,14 @@ OUTER:
 func GuildCountsFunc() []int {
 	numShards := ShardManager.GetNumShards()
 	result := make([]int, numShards)
-	State.RLock()
-	for _, v := range State.Guilds {
-		parsed, _ := strconv.ParseInt(v.ID(), 10, 64)
-		shard := (parsed >> 22) % int64(numShards)
-		result[shard]++
-	}
-	State.RUnlock()
+
+	State.IterateGuilds(nil, func(g *discordgo.Guild) bool {
+
+		parsed, _ := strconv.ParseInt(g.ID, 10, 64)
+		result[(parsed>>22)%int64(numShards)]++
+
+		return true
+	})
 
 	return result
 }
