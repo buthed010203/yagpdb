@@ -99,7 +99,12 @@ func Run() {
 	})
 
 	if err != nil {
-		panic("failed initalizing state")
+		panic("failed initalizing state: " + err.Error())
+	}
+
+	err = loadRedisConnectedGuilds()
+	if err != nil {
+		panic("failed loading connnected guilds: " + err.Error())
 	}
 
 	Running = true
@@ -136,55 +141,47 @@ func Stop(wg *sync.WaitGroup) {
 	wg.Done()
 }
 
+func loadRedisConnectedGuilds() error {
+	c := common.MustGetRedisClient()
+	l, err := c.Cmd("SMEMBERS", "connected_guilds").List()
+	if err != nil {
+		return err
+	}
+
+	redisConnectedGuilds = make([]int64, 0, len(l))
+
+	for _, v := range l {
+		parsed := common.MustParseInt(v)
+		redisConnectedGuilds = append(redisConnectedGuilds, parsed)
+	}
+
+	return nil
+}
+
+var redisConnectedGuilds []int
+
 // checks all connected guilds and emites guildremoved on those no longer connected
-func checkConnectedGuilds() {
+func checkConnectedGuilds(shard int, numShards int, guilds []*discordgo.Guild) {
 	log.Info("Checking joined guilds")
 
-	client, err := common.RedisPool.Get()
-	if err != nil {
-		log.WithError(err).Error("Failed retrieving connection from redis pool")
-		return
-	}
-
-	currentlyConnected, err := client.Cmd("SMEMBERS", "connected_guilds").List()
-	if err != nil {
-		log.WithError(err).Error("Failed retrieving currently connected guilds")
-		return
-	}
-
-	guilds := make([]*discordgo.UserGuild, 0)
-	after := ""
-
-	for {
-		g, err := common.BotSession.UserGuilds(100, "", after)
-		if err != nil {
-			log.WithError(err).Error("Userguilds failed")
-			return
-		}
-
-		guilds = append(guilds, g...)
-		if len(g) < 100 {
-			break
-		}
-
-		after = g[len(g)-1].ID
-	}
+	redisClient := common.MustGetRedisClient()
 
 OUTER:
-	for _, gID := range currentlyConnected {
-		for _, g := range guilds {
-			if g.ID == gID {
-				continue OUTER
+	for _, rg := range redisConnectedGuilds {
+		rgShard := (rg >> 22) % numShards
+		if rgShard == shard {
+			for _, g := range guilds {
+				if common.MustParseInt(g.ID) == rg {
+					continue OUTER
+				}
 			}
 		}
 
-		err := client.Cmd("SREM", "connected_guilds", gID).Err
-		if err != nil {
-			log.WithError(err).Error("Failed removing guild from connected guilds")
-		} else {
-			EmitGuildRemoved(client, gID)
-			log.WithField("guild", gID).Info("Removed from guild when offline")
-		}
+		redisClient.Cmd("SREM", "connected_guilds", rg)
+
+		// Was not found if we got here, meaning we left the guild while offline
+		EmitGuildRemoved(client, gID)
+		log.WithField("guild", gID).Info("Removed from guild when offline")
 	}
 }
 
