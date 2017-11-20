@@ -2,6 +2,7 @@ package bot
 
 import (
 	"github.com/Sirupsen/logrus"
+	"github.com/jonas747/dbstate"
 	"github.com/jonas747/discordgo"
 	"github.com/jonas747/yagpdb/bot/eventsystem"
 	"github.com/jonas747/yagpdb/common"
@@ -17,14 +18,9 @@ var (
 )
 
 func GetMember(guildID, userID string) (*discordgo.Member, error) {
-	gs := State.Guild(true, guildID)
-	if gs == nil {
-		return nil, ErrGuildNotFound
-	}
-
-	cop := gs.MemberCopy(true, userID, true)
-	if cop != nil {
-		return cop, nil
+	m, err := State.GuildMember(guildID, userID)
+	if !dbstate.IsNotFound(err) {
+		return m, err
 	}
 
 	result := <-MemberFetcher.RequestMember(guildID, userID)
@@ -166,25 +162,34 @@ func (m *memberFetcher) next(guildID string) (more bool) {
 
 	logrus.WithField("guild", guildID).WithField("user", elem.Member).Info("Requesting guild member")
 
-	if gs := State.Guild(true, guildID); gs != nil {
-		if member := gs.MemberCopy(true, elem.Member, true); member != nil {
-			// Member is already in state, no need to request it
-			m.Lock()
+	// Check if member is already in state
+	existing, err := State.GuildMember(guildID, elem.Member)
+	if err == nil {
+		// Member is already in state, no need to request it
+		m.Lock()
 
-			result := MemberFetchResult{
-				Member: member,
-			}
-			elem.sendResult(result)
-			q.Queue = q.Queue[1:]
-			m.Unlock()
-			return true
+		result := MemberFetchResult{
+			Member: existing,
 		}
+		elem.sendResult(result)
+		q.Queue = q.Queue[1:]
+		m.Unlock()
+		return true
 	}
 
+	// Check if something went wrong querying state
+	if !dbstate.IsNotFound(err) {
+		logrus.WithField("guild", guildID).WithField("user", elem.Member).WithError(err).Error("Failed fetching member from state")
+		return true
+	}
+
+	// Do the actual fetching
 	member, err := common.BotSession.GuildMember(guildID, elem.Member)
 	if err != nil {
 		logrus.WithField("guild", guildID).WithField("user", elem.Member).WithError(err).Error("Failed fetching member")
 	} else {
+		member.GuildID = guildID
+
 		go eventsystem.EmitEvent(&eventsystem.EventData{
 			EventDataContainer: &eventsystem.EventDataContainer{
 				GuildMemberAdd: &discordgo.GuildMemberAdd{Member: member},
@@ -192,8 +197,9 @@ func (m *memberFetcher) next(guildID string) (more bool) {
 			Type: eventsystem.EventMemberFetched,
 		}, eventsystem.EventMemberFetched)
 
-		if gs := State.Guild(true, guildID); gs != nil {
-			gs.MemberAddUpdate(true, member)
+		err := State.HandleEventMutexSynced(0, &discordgo.GuildMemberUpdate{Member: member})
+		if err != nil {
+			logrus.WithError(err).WithField("user", elem.Member).Error("Failed inserting member into state")
 		}
 	}
 

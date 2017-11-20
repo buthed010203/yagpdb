@@ -42,13 +42,14 @@ func RedisWrapper(inner eventsystem.Handler) eventsystem.Handler {
 
 func GetCreatePrivateChannel(user string) (*discordgo.Channel, error) {
 
-	State.RLock()
-	defer State.RUnlock()
-	for _, c := range State.PrivateChannels {
-		if c.Recipient() != nil && c.Recipient().ID == user {
-			return c.Copy(true, false), nil
-		}
-	}
+	// State.RLock()
+	// defer State.RUnlock()
+
+	// for _, c := range State.PrivateChannels {
+	// 	if c.Recipient() != nil && c.Recipient().ID == user {
+	// 		return c.Copy(true, false), nil
+	// 	}
+	// }
 
 	channel, err := common.BotSession.UserChannelCreate(user)
 	if err != nil {
@@ -74,16 +75,7 @@ var (
 )
 
 func AdminOrPerm(needed int, userID, channelID string) (bool, error) {
-	channel := State.Channel(true, channelID)
-	if channel == nil {
-		return false, errors.New("Channel not found")
-	}
-
-	perms, err := channel.Guild.MemberPermissions(true, channelID, userID)
-	if err != nil {
-		return false, err
-	}
-
+	perms, err := MemberPermissions(nil, channelID, userID)
 	if err != nil {
 		return false, err
 	}
@@ -97,4 +89,102 @@ func AdminOrPerm(needed int, userID, channelID string) (bool, error) {
 	}
 
 	return false, nil
+}
+
+// Calculates the permissions for a member.
+// https://support.discordapp.com/hc/en-us/articles/206141927-How-is-the-permission-hierarchy-structured-
+func MemberPermissions(g *discordgo.Guild, channelID string, memberID string) (apermissions int, err error) {
+	var channel *discordgo.Channel
+	if g == nil {
+		channel, err = State.Channel(channelID)
+		if err != nil {
+			return 0, err
+		}
+
+		g, err = State.Guild(channel.GuildID)
+		if err != nil {
+			return 0, err
+		}
+	} else {
+		for _, c := range g.Channels {
+			if c.ID == channelID {
+				channel = c
+			}
+		}
+
+		if channel == nil {
+			return 0, errors.New("Channel not found")
+		}
+	}
+
+	if memberID == g.OwnerID {
+		return discordgo.PermissionAll, nil
+	}
+
+	member, err := State.GuildMember(g.ID, memberID)
+	if err != nil {
+		return 0, err
+	}
+
+	for _, role := range g.Roles {
+		if role.ID == g.ID {
+			apermissions |= role.Permissions
+			break
+		}
+	}
+
+	for _, role := range g.Roles {
+		for _, roleID := range member.Roles {
+			if role.ID == roleID {
+				apermissions |= role.Permissions
+				break
+			}
+		}
+	}
+
+	// Administrator bypasses channel overrides
+	if apermissions&discordgo.PermissionAdministrator == discordgo.PermissionAdministrator {
+		apermissions |= discordgo.PermissionAll
+		return
+	}
+
+	// Apply @everyone overrides from the channel.
+	for _, overwrite := range channel.PermissionOverwrites {
+		if g.ID == overwrite.ID {
+			apermissions &= ^overwrite.Deny
+			apermissions |= overwrite.Allow
+			break
+		}
+	}
+
+	denies := 0
+	allows := 0
+
+	// Member overwrites can override role overrides, so do two passes
+	for _, overwrite := range channel.PermissionOverwrites {
+		for _, roleID := range member.Roles {
+			if overwrite.Type == "role" && roleID == overwrite.ID {
+				denies |= overwrite.Deny
+				allows |= overwrite.Allow
+				break
+			}
+		}
+	}
+
+	apermissions &= ^denies
+	apermissions |= allows
+
+	for _, overwrite := range channel.PermissionOverwrites {
+		if overwrite.Type == "member" && overwrite.ID == memberID {
+			apermissions &= ^overwrite.Deny
+			apermissions |= overwrite.Allow
+			break
+		}
+	}
+
+	if apermissions&discordgo.PermissionAdministrator == discordgo.PermissionAdministrator {
+		apermissions |= discordgo.PermissionAllChannel
+	}
+
+	return
 }

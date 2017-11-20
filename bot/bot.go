@@ -120,8 +120,6 @@ func Run() {
 			log.Debug("Ran StartBot for ", p.Name())
 		}
 	}
-
-	go checkConnectedGuilds()
 }
 
 func Stop(wg *sync.WaitGroup) {
@@ -158,7 +156,7 @@ func loadRedisConnectedGuilds() error {
 	return nil
 }
 
-var redisConnectedGuilds []int
+var redisConnectedGuilds []int64
 
 // checks all connected guilds and emites guildremoved on those no longer connected
 func checkConnectedGuilds(shard int, numShards int, guilds []*discordgo.Guild) {
@@ -168,8 +166,8 @@ func checkConnectedGuilds(shard int, numShards int, guilds []*discordgo.Guild) {
 
 OUTER:
 	for _, rg := range redisConnectedGuilds {
-		rgShard := (rg >> 22) % numShards
-		if rgShard == shard {
+		rgShard := (rg >> 22) % int64(numShards)
+		if rgShard == int64(shard) {
 			for _, g := range guilds {
 				if common.MustParseInt(g.ID) == rg {
 					continue OUTER
@@ -180,8 +178,8 @@ OUTER:
 		redisClient.Cmd("SREM", "connected_guilds", rg)
 
 		// Was not found if we got here, meaning we left the guild while offline
-		EmitGuildRemoved(client, gID)
-		log.WithField("guild", gID).Info("Removed from guild when offline")
+		EmitGuildRemoved(redisClient, strconv.FormatInt(rg, 10))
+		log.WithField("guild", rg).Info("Removed from guild when offline")
 	}
 }
 

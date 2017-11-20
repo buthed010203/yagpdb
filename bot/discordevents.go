@@ -2,6 +2,7 @@ package bot
 
 import (
 	log "github.com/Sirupsen/logrus"
+	"github.com/jonas747/dbstate"
 	"github.com/jonas747/discordgo"
 	"github.com/jonas747/yagpdb/bot/eventsystem"
 	"github.com/jonas747/yagpdb/common"
@@ -78,13 +79,13 @@ func HandlePresenceUpdate(evt *eventsystem.EventData) {
 		return
 	}
 
-	gs := State.Guild(true, p.GuildID)
-	if gs == nil {
+	_, err := State.GuildMember(p.GuildID, p.User.ID)
+	if err == nil {
 		return
 	}
 
-	m := gs.Member(true, p.User.ID)
-	if m != nil && m.Member != nil {
+	if !dbstate.IsNotFound(err) {
+		log.WithError(err).Error("Failed querying state")
 		return
 	}
 
@@ -94,7 +95,11 @@ func HandlePresenceUpdate(evt *eventsystem.EventData) {
 // StateHandler updates the world state
 // use AddHandlerBefore to add handler before this one, otherwise they will alwyas be after
 func StateHandler(evt *eventsystem.EventData) {
-	State.HandleEvent(ContextSession(evt.Context()), evt.EvtInterface)
+	session := ContextSession(evt.Context())
+	err := State.HandleEventMutexSynced(session.ShardID, evt.EvtInterface)
+	if err != nil {
+		log.WithField("evt", evt.Type.String()).WithError(err).Error("State failed handling event")
+	}
 }
 
 func HandleGuildUpdate(evt *eventsystem.EventData) {

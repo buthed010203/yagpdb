@@ -1,136 +1,124 @@
 package bot
 
 import (
-	log "github.com/Sirupsen/logrus"
-	"github.com/jonas747/discordgo"
-	"github.com/jonas747/dutil/dstate"
-	"github.com/jonas747/yagpdb/common"
-	"sort"
+	"github.com/jonas747/dbstate"
 )
-
-type WrappedMessage struct {
-	*discordgo.Message
-	Deleted bool
-}
 
 // GetMessages Gets messages from state if possible, if not then it retrieves from the discord api
 // Puts the messages in the state aswell
-func GetMessages(channelID string, limit int, deleted bool) ([]*WrappedMessage, error) {
-	if limit < 1 {
-		return []*WrappedMessage{}, nil
+func GetMessages(channelID string, limit int, deleted bool) ([]*dbstate.MessageWithMeta, error) {
+
+	msgs, err := State.LastChannelMessages(channelID, limit, deleted)
+	if err != nil {
+		return nil, err
 	}
 
-	// check state
-	msgBuf := make([]*WrappedMessage, limit)
+	newMsgs := make([]*dbstate.MessageWithMeta, len(msgs))
 
-	cs := State.Channel(true, channelID)
-
-	cs.Owner.RLock()
-
-	n := len(msgBuf) - 1
-	for i := len(cs.Messages) - 1; i >= 0; i-- {
-		if !deleted {
-			if cs.Messages[i].Deleted {
-				continue
-			}
-		}
-		m := cs.Messages[i].Copy(true)
-		msgBuf[n] = &WrappedMessage{Message: m}
-		if cs.Messages[i].Deleted {
-			msgBuf[n].Deleted = true
-		}
-		n--
-		if n < 0 {
-			break
-		}
+	// Reverse
+	for i := 0; i < len(msgs); i++ {
+		newMsgs[i] = msgs[len(msgs)-(i+1)]
 	}
 
-	cs.Owner.RUnlock()
+	return msgs, err
 
-	// Check if the state was full
-	if n >= limit {
-		return msgBuf, nil
-	}
+	// if limit < 1 {
+	// 	return []*WrappedMessage{}, nil
+	// }
 
-	// Not enough messages in state, retrieve them from the api
-	// Initialize the before id
-	before := ""
-	if n+1 < len(msgBuf) {
-		if msgBuf[n+1] != nil {
-			before = msgBuf[n+1].ID
-		}
-	}
+	// // check state
+	// msgBuf := make([]*WrappedMessage, limit)
 
-	// Start fetching from the api
-	for n >= 0 {
-		toFetch := n + 1
-		if toFetch > 100 {
-			toFetch = 100
-		}
-		msgs, err := common.BotSession.ChannelMessages(channelID, toFetch, before, "", "")
-		if err != nil {
-			return nil, err
-		}
+	// cs := State.Channel(true, channelID)
 
-		log.WithField("num_msgs", len(msgs)).Info("API history req finished")
+	// cs.Owner.RLock()
 
-		if len(msgs) < 1 { // Nothing more
-			break
-		}
+	// n := len(msgBuf) - 1
+	// for i := len(cs.Messages) - 1; i >= 0; i-- {
+	// 	if !deleted {
+	// 		if cs.Messages[i].Deleted {
+	// 			continue
+	// 		}
+	// 	}
+	// 	m := cs.Messages[i].Copy(true)
+	// 	msgBuf[n] = &WrappedMessage{Message: m}
+	// 	if cs.Messages[i].Deleted {
+	// 		msgBuf[n].Deleted = true
+	// 	}
+	// 	n--
+	// 	if n < 0 {
+	// 		break
+	// 	}
+	// }
 
-		// Copy over to buffer
-		for k, m := range msgs {
-			msgBuf[n-k] = &WrappedMessage{Message: m}
-		}
+	// cs.Owner.RUnlock()
 
-		// Oldest message is last
-		before = msgs[len(msgs)-1].ID
-		n -= len(msgs)
+	// // Check if the state was full
+	// if n >= limit {
+	// 	return msgBuf, nil
+	// }
 
-		if len(msgs) < toFetch {
-			break
-		}
-	}
+	// // Not enough messages in state, retrieve them from the api
+	// // Initialize the before id
+	// before := ""
+	// if n+1 < len(msgBuf) {
+	// 	if msgBuf[n+1] != nil {
+	// 		before = msgBuf[n+1].ID
+	// 	}
+	// }
 
-	// remove nil entries if it wasn't big enough
-	if n+1 > 0 {
-		msgBuf = msgBuf[n+1:]
-	}
+	// // Start fetching from the api
+	// for n >= 0 {
+	// 	toFetch := n + 1
+	// 	if toFetch > 100 {
+	// 		toFetch = 100
+	// 	}
+	// 	msgs, err := common.BotSession.ChannelMessages(channelID, toFetch, before, "", "")
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
 
-	// merge the current state with this new one and sort
-	cs.Owner.Lock()
-	defer cs.Owner.Unlock()
+	// 	log.WithField("num_msgs", len(msgs)).Info("API history req finished")
 
-	for _, m := range msgBuf {
-		cs.MessageAddUpdate(false, m.Message, -1, 0)
-	}
+	// 	if len(msgs) < 1 { // Nothing more
+	// 		break
+	// 	}
 
-	sort.Sort(DiscordMessages(cs.Messages))
+	// 	// Copy over to buffer
+	// 	for k, m := range msgs {
+	// 		msgBuf[n-k] = &WrappedMessage{Message: m}
+	// 	}
 
-	cs.UpdateMessages(false, State.MaxChannelMessages, State.MaxMessageAge)
+	// 	// Oldest message is last
+	// 	before = msgs[len(msgs)-1].ID
+	// 	n -= len(msgs)
 
-	// Return at most limit results
-	if limit < len(msgBuf) {
-		return msgBuf[len(msgBuf)-limit:], nil
-	} else {
-		return msgBuf, nil
-	}
-}
+	// 	if len(msgs) < toFetch {
+	// 		break
+	// 	}
+	// }
 
-type DiscordMessages []*dstate.MessageState
+	// // remove nil entries if it wasn't big enough
+	// if n+1 > 0 {
+	// 	msgBuf = msgBuf[n+1:]
+	// }
 
-// Len is the number of elements in the collection.
-func (d DiscordMessages) Len() int { return len(d) }
+	// // merge the current state with this new one and sort
+	// cs.Owner.Lock()
+	// defer cs.Owner.Unlock()
 
-// Less reports whether the element with
-// index i should sort before the element with index j.
-func (d DiscordMessages) Less(i, j int) bool {
-	return d[i].ParsedCreated.Before(d[j].ParsedCreated)
-}
+	// for _, m := range msgBuf {
+	// 	cs.MessageAddUpdate(false, m.Message, -1, 0)
+	// }
 
-// Swap swaps the elements with indexes i and j.
-func (d DiscordMessages) Swap(i, j int) {
-	temp := d[i]
-	d[i] = d[j]
-	d[j] = temp
+	// sort.Sort(DiscordMessages(cs.Messages))
+
+	// cs.UpdateMessages(false, State.MaxChannelMessages, State.MaxMessageAge)
+
+	// // Return at most limit results
+	// if limit < len(msgBuf) {
+	// 	return msgBuf[len(msgBuf)-limit:], nil
+	// } else {
+	// 	return msgBuf, nil
+	// }
 }
