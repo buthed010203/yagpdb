@@ -72,35 +72,35 @@ func (cs *CustomCommand) HandleCommand(raw string, trigger *commandsystem.Trigge
 	}
 	defer common.UnlockRedisKey(client, RKeyCommandLock(trigger.Message.Author.ID, cs.Name))
 
-	cState := bot.State.Channel(true, trigger.Message.ChannelID)
-	if cState == nil {
-		return nil, errors.New("Channel not found")
+	channel, err := bot.State.Channel(trigger.Message.ChannelID)
+	if err != nil {
+		return nil, errors.WithMessage(err, "Channel")
 	}
 
 	// Set up log entry for later use
 	logEntry := &common.LoggedExecutedCommand{
 		UserID:    trigger.Message.Author.ID,
-		ChannelID: cState.ID(),
+		ChannelID: channel.ID,
 
 		Command:    cs.Name,
 		RawCommand: raw,
 		TimeStamp:  time.Now(),
 	}
 
-	if cState.Guild != nil {
-		logEntry.GuildID = cState.Guild.ID()
+	if channel.Guild != nil {
+		logEntry.GuildID = channel.Guild.ID()
 	}
 
-	resp, autoDel := cs.checkCanExecuteCommand(trigger, client, cState)
+	resp, autoDel := cs.checkCanExecuteCommand(trigger, client, channel)
 	if resp != "" {
-		m, err := common.BotSession.ChannelMessageSend(cState.ID(), resp)
+		m, err := common.BotSession.ChannelMessageSend(channel.ID(), resp)
 		if m != nil {
 			return []*discordgo.Message{m}, err
 		}
 		return nil, err
 	}
 
-	log.WithField("channel", cState.ID()).WithField("author", trigger.Message.Author.ID).Info("Handling command: " + raw)
+	log.WithField("channel", channel.ID()).WithField("author", trigger.Message.Author.ID).Info("Handling command: " + raw)
 
 	runCtx, cancelExec := context.WithTimeout(ctx, CommandExecTimeout)
 	defer cancelExec()
@@ -110,10 +110,10 @@ func (cs *CustomCommand) HandleCommand(raw string, trigger *commandsystem.Trigge
 
 	if err != nil {
 		if errors.Cause(err) == context.Canceled || errors.Cause(err) == context.DeadlineExceeded {
-			common.BotSession.ChannelMessageSend(cState.Channel.ID, "Took longer than "+CommandExecTimeout.String()+" to handle command: `"+common.EscapeSpecialMentions(raw)+"`, Cancelled the command.")
+			common.BotSession.ChannelMessageSend(channel.Channel.ID, "Took longer than "+CommandExecTimeout.String()+" to handle command: `"+common.EscapeSpecialMentions(raw)+"`, Cancelled the command.")
 		} else {
 			logEntry.Error = err.Error()
-			log.WithError(err).WithField("channel", cState.ID()).Error(cs.Name, ": failed handling command")
+			log.WithError(err).WithField("channel", channel.ID()).Error(cs.Name, ": failed handling command")
 		}
 	}
 

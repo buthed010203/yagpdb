@@ -16,10 +16,8 @@ func tmplSendDM(c *Context) interface{} {
 		}
 		c.SentDM = true
 
-		c.GS.RLock()
-		gName := c.GS.Guild.Name
+		gName := c.Guild.Name
 		memberID := c.Member.User.ID
-		c.GS.RUnlock()
 
 		msg := fmt.Sprint(s...)
 		msg = fmt.Sprintf("Custom Command DM From the server **%s**:\n%s", gName, msg)
@@ -67,7 +65,14 @@ func tmplMentionRoleID(c *Context) interface{} {
 			return ""
 		}
 
-		r := c.GS.Role(true, role)
+		var r *discordgo.Role
+		for _, v := range c.Guild.Roles {
+			if v.ID == role {
+				r = v
+				break
+			}
+		}
+
 		if r == nil {
 			return "(role not found)"
 		}
@@ -93,8 +98,7 @@ func tmplMentionRoleName(c *Context) interface{} {
 		}
 
 		var found *discordgo.Role
-		c.GS.RLock()
-		for _, r := range c.GS.Guild.Roles {
+		for _, r := range c.Guild.Roles {
 			if r.Name == role {
 				if !common.ContainsStringSlice(c.MentionRoles, r.ID) {
 					c.MentionRoles = append(c.MentionRoles, r.ID)
@@ -102,7 +106,7 @@ func tmplMentionRoleName(c *Context) interface{} {
 				}
 			}
 		}
-		c.GS.RUnlock()
+
 		if found == nil {
 			return "(role not found)"
 		}
@@ -132,9 +136,7 @@ func tmplHasRoleID(c *Context) interface{} {
 			return false
 		}
 
-		c.GS.RLock()
 		contains := common.ContainsStringSlice(c.Member.Roles, role)
-		c.GS.RUnlock()
 		return contains
 	}
 }
@@ -146,21 +148,16 @@ func tmplHasRoleName(c *Context) interface{} {
 			return false
 		}
 
-		c.GS.RLock()
-
-		for _, r := range c.GS.Guild.Roles {
+		for _, r := range c.Guild.Roles {
 			if strings.EqualFold(r.Name, name) {
 				if common.ContainsStringSlice(c.Member.Roles, r.ID) {
-					c.GS.RUnlock()
 					return true
 				}
 
-				c.GS.RUnlock()
 				return false
 			}
 		}
 
-		c.GS.RUnlock()
 		return true
 	}
 }

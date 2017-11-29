@@ -92,7 +92,7 @@ func execCmd(ctx *templates.Context, dryRun bool, execCtx *discordgo.User, m *di
 
 	triggerData := &commandsystem.TriggerData{
 		Session: common.BotSession,
-		DState:  bot.State,
+		State:   bot.State,
 		Message: m.Message,
 		Source:  commandsystem.SourcePrefix,
 	}
@@ -125,11 +125,8 @@ func execCmd(ctx *templates.Context, dryRun bool, execCtx *discordgo.User, m *di
 	}
 
 	parsed.Source = triggerData.Source
-	parsed.Channel = ctx.CS
-	if ctx.CS == nil {
-		parsed.Channel = ctx.GS.Channel(true, ctx.GS.ID())
-	}
-	parsed.Guild = parsed.Channel.Guild
+	parsed.Channel = ctx.Channel
+	parsed.Guild = ctx.Guild
 
 	resp, err := cast.Run(parsed.WithContext(context.WithValue(parsed.Context(), CtxKeyRedisClient, ctx.Redis)))
 

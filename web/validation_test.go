@@ -39,7 +39,7 @@ var (
 				Length:    "aa",
 				TrimSpace: " ",
 			},
-			Valid: false,
+			Valid: true,
 		},
 	}
 )
@@ -100,7 +100,7 @@ var (
 				ChannelNotEmpty:   "0",
 				ChannelAllowEmpty: "5",
 			},
-			Valid: false,
+			Valid: true,
 		},
 	}
 )

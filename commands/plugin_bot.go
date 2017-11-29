@@ -48,13 +48,13 @@ func (p *Plugin) GetPrefix(s *discordgo.Session, m *discordgo.MessageCreate) str
 	}
 	defer common.RedisPool.Put(client)
 
-	channel := bot.State.Channel(true, m.ChannelID)
-	if channel == nil {
-		log.Error("Failed retrieving channels from state")
+	channel, err := bot.State.Channel(m.ChannelID)
+	if err != nil {
+		log.WithError(err).Error("Failed retrieving channel from state")
 		return ""
 	}
 
-	prefix, err := GetCommandPrefix(client, channel.Guild.ID())
+	prefix, err := GetCommandPrefix(client, channel.GuildID)
 	if err != nil {
 		log.WithError(err).Error("Failed retrieving commands prefix")
 	}
@@ -147,7 +147,7 @@ func cmdFuncHelp(data *commandsystem.ExecData) (interface{}, error) {
 	// Fetch the prefix if ther command was not run in a dm
 	footer := ""
 	if data.Source != commandsystem.SourceDM && target == "" {
-		prefix, err := GetCommandPrefix(data.Context().Value(CtxKeyRedisClient).(*redis.Client), data.Guild.ID())
+		prefix, err := GetCommandPrefix(data.Context().Value(CtxKeyRedisClient).(*redis.Client), data.Guild.ID)
 		if err != nil {
 			return "Error communicating with redis", err
 		}

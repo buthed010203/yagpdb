@@ -3,7 +3,6 @@ package templates
 import (
 	"bytes"
 	"github.com/jonas747/discordgo"
-	"github.com/jonas747/dutil/dstate"
 	"github.com/jonas747/yagpdb/common"
 	"github.com/mediocregopher/radix.v2/redis"
 	"github.com/pkg/errors"
@@ -44,8 +43,8 @@ func RegisterSetupFunc(f ContextSetupFunc) {
 }
 
 type Context struct {
-	GS *dstate.GuildState
-	CS *dstate.ChannelState
+	Guild   *discordgo.Guild
+	Channel *discordgo.Channel
 
 	Member *discordgo.Member
 	Msg    *discordgo.Message
@@ -64,10 +63,10 @@ type Context struct {
 	SentDM bool
 }
 
-func NewContext(botUser *discordgo.User, gs *dstate.GuildState, cs *dstate.ChannelState, member *discordgo.Member) *Context {
+func NewContext(botUser *discordgo.User, g *discordgo.Guild, c *discordgo.Channel, member *discordgo.Member) *Context {
 	ctx := &Context{
-		GS: gs,
-		CS: cs,
+		Guild:   g,
+		Channel: c,
 
 		BotUser: botUser,
 		Member:  member,
@@ -89,17 +88,15 @@ func (c *Context) setupContextFuncs() {
 
 func (c *Context) setupBaseData() {
 
-	if c.GS != nil {
-		guild := c.GS.LightCopy(false)
-		c.Data["Guild"] = guild
-		c.Data["Server"] = guild
-		c.Data["server"] = guild
+	if c.Guild != nil {
+		c.Data["Guild"] = c.Guild
+		c.Data["Server"] = c.Guild
+		c.Data["server"] = c.Guild
 	}
 
-	if c.CS != nil {
-		channel := c.CS.Copy(false, false)
-		c.Data["Channel"] = channel
-		c.Data["channel"] = channel
+	if c.Channel != nil {
+		c.Data["Channel"] = c.Channel
+		c.Data["channel"] = c.Channel
 	}
 
 	if c.Member != nil {
@@ -114,16 +111,10 @@ func (c *Context) Execute(redisClient *redis.Client, source string) (string, err
 		// Construct a fake message
 		c.Msg = new(discordgo.Message)
 		c.Msg.Author = c.BotUser
-		c.Msg.ChannelID = c.GS.ID()
+		c.Msg.ChannelID = c.Guild.ID
 	}
 
-	if c.GS != nil {
-		c.GS.RLock()
-	}
 	c.setupBaseData()
-	if c.GS != nil {
-		c.GS.RUnlock()
-	}
 
 	c.Redis = redisClient
 
