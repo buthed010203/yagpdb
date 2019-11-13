@@ -1,6 +1,7 @@
 name: Go
 on: [push]
 jobs:
+docker:
 
   build:
     name: Build
